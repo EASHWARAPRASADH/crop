@@ -1,0 +1,35 @@
+{
+  "name": "gotek-idcard-cropping",
+  "version": "1.0.0",
+  "build": {
+    "command": "npm install && npm run build",
+    "output_directory": "dist"
+  },
+  "start": "node server.js",
+  "environment": {
+    "node_version": "22.x",
+    "variables": {
+      "MYSQL_HOST": "localhost",
+      "MYSQL_USER": "required",
+      "MYSQL_PASSWORD": "required",
+      "MYSQL_DATABASE": "required",
+      "GEMINI_API_KEY": "required",
+      "PORT": "5001"
+    }
+  },
+  "framework": "node",
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/$1"
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "/uploads/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
