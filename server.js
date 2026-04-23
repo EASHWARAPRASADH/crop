@@ -68,8 +68,9 @@ async function connectDB() {
     await ensureSchema();
   } catch (err) {
     console.error('❌ CRITICAL: MySQL connection failed!');
-    console.error(err);
-    process.exit(1);
+    console.error('Please check your MYSQL_HOST, USER, and PASSWORD variables.');
+    console.error(err.message);
+    // process.exit(1); // Do not exit, allow server to stay up for log inspection
   }
 }
 
