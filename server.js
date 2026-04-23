@@ -78,14 +78,76 @@ async function ensureSchema() {
   try {
     console.log('🏗️  Verifying database schema...');
     
-    // Get the current database name to query INFORMATION_SCHEMA accurately
+    // 1. Create Tables if they don't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id varchar(100) NOT NULL,
+        name varchar(255) NOT NULL,
+        organization varchar(255) DEFAULT NULL,
+        status enum('draft','active','validated','generating','completed') DEFAULT 'draft',
+        template varchar(100) DEFAULT 'School',
+        total_records int(11) DEFAULT 0,
+        valid_records int(11) DEFAULT 0,
+        invalid_records int(11) DEFAULT 0,
+        missing_photos int(11) DEFAULT 0,
+        color varchar(20) DEFAULT '#3B82F6',
+        created_by varchar(100) DEFAULT NULL,
+        current_stage varchar(50) DEFAULT 'data_collected',
+        completed_stages longtext DEFAULT '[]',
+        pdf_url varchar(500) DEFAULT NULL,
+        branch varchar(255) DEFAULT NULL,
+        assignedTo varchar(100) DEFAULT NULL,
+        assignedToName varchar(255) DEFAULT NULL,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS records (
+        id varchar(100) NOT NULL,
+        project_id varchar(100) NOT NULL,
+        name varchar(255) DEFAULT NULL,
+        photo_url varchar(500) DEFAULT NULL,
+        data longtext DEFAULT NULL,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY project_id (project_id),
+        CONSTRAINT records_ibfk_1 FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id varchar(100) NOT NULL,
+        projectId varchar(100) NOT NULL,
+        status varchar(50) DEFAULT 'pending',
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id varchar(100) NOT NULL,
+        name varchar(255) DEFAULT NULL,
+        email varchar(255) NOT NULL,
+        password varchar(255) NOT NULL,
+        role varchar(50) DEFAULT 'user',
+        organization varchar(255) DEFAULT NULL,
+        created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY email (email)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    console.log('✅ Base tables verified/created.');
+
+    // 2. Add missing columns (for existing databases)
     const [dbResult] = await pool.query('SELECT DATABASE() as db');
     const currentDb = dbResult[0].db;
     
-    if (!currentDb) {
-      console.error('❌ Could not determine current database name. Schema verification aborted.');
-      return;
-    }
+    if (!currentDb) return;
 
     const columns = [
       { name: 'current_stage', type: "varchar(50) DEFAULT 'data_collected'" },
@@ -97,7 +159,6 @@ async function ensureSchema() {
     ];
 
     for (const col of columns) {
-      // Robust check using INFORMATION_SCHEMA which is more reliable than SHOW COLUMNS
       const [rows] = await pool.query(
         `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
          WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'projects' AND COLUMN_NAME = ?`,
@@ -107,18 +168,11 @@ async function ensureSchema() {
       if (rows.length === 0) {
         console.log(`➕ Adding missing column: ${col.name} to projects table`);
         try {
-          // Use ALTER TABLE to add the column
           await pool.query(`ALTER TABLE projects ADD COLUMN ${col.name} ${col.type}`);
-          console.log(`✅ Successfully added ${col.name}`);
-        } catch (alterError) {
-          console.error(`❌ Failed to add column ${col.name}:`, alterError.message);
-        }
-      } else {
-        // console.log(`ℹ️ Column ${col.name} already exists.`);
+        } catch (e) { console.error(`Failed to add ${col.name}: ${e.message}`); }
       }
     }
     
-    // Ensure all existing rows have valid JSON for completed_stages
     await pool.query(`UPDATE projects SET completed_stages = '[]' WHERE completed_stages IS NULL OR completed_stages = ''`);
     
     console.log('✅ Database schema verified and updated.');
