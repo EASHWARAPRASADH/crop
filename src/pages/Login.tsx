@@ -6,37 +6,27 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
 const Login = () => {
-    const [isRegister, setIsRegister] = useState(false);
-    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [organization, setOrganization] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const { signIn, signUp } = useAuth();
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const { signIn } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setErrorMsg(null);
 
         try {
-            if (isRegister) {
-                const { error } = await signUp(name, email, password, organization);
-                if (error) {
-                    toast.error(error);
-                } else {
-                    toast.success('Account created successfully!');
-                    navigate('/dashboard');
-                }
+            const { error } = await signIn(email, password);
+            if (error) {
+                setErrorMsg(error);
+                toast.error(error);
             } else {
-                const { error } = await signIn(email, password);
-                if (error) {
-                    toast.error(error);
-                } else {
-                    toast.success('Welcome back!');
-                    navigate('/dashboard');
-                }
+                toast.success('Welcome back!');
+                navigate('/dashboard');
             }
         } finally {
             setLoading(false);
@@ -58,39 +48,22 @@ const Login = () => {
                         <CreditCard className="w-7 h-7 text-white" />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 mt-4 tracking-wider uppercase">GOTEK</h1>
-                    <p className="text-gray-500 mt-1">
-                        {isRegister ? 'Create your account' : 'Sign in to your workspace'}
-                    </p>
+                    <p className="text-gray-500 mt-1">Sign in to your workspace</p>
                 </div>
 
 
                 {/* Form */}
                 <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 p-8">
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {isRegister && (
-                            <>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
-                                    <input
-                                        type="text"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        required
-                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                        placeholder="John Doe"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Organization</label>
-                                    <input
-                                        type="text"
-                                        value={organization}
-                                        onChange={(e) => setOrganization(e.target.value)}
-                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                        placeholder="ABC School"
-                                    />
-                                </div>
-                            </>
+                        {errorMsg && (
+                            <motion.div 
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold flex items-center gap-2"
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+                                {errorMsg}
+                            </motion.div>
                         )}
 
                         <div>
@@ -113,7 +86,6 @@ const Login = () => {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
-                                    minLength={6}
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-10"
                                     placeholder="••••••••"
                                 />
@@ -130,22 +102,12 @@ const Login = () => {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-xl font-medium text-sm hover:from-blue-600 hover:to-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-xl font-bold text-sm hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                         >
                             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                            {isRegister ? 'Create Account' : 'Sign In'}
+                            Sign In
                         </button>
-
                     </form>
-
-                    <div className="mt-6 text-center">
-                        <button
-                            onClick={() => setIsRegister(!isRegister)}
-                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                            {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Register"}
-                        </button>
-                    </div>
                 </div>
             </motion.div>
         </div>
