@@ -99,7 +99,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@rollup/rollup-darwin-arm64": "^4.60.1",
     "@tailwindcss/typography": "^0.5.16",
     "@types/fabric": "^5.3.10",
     "@types/jsbarcode": "^3.11.4",
