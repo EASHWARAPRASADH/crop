@@ -143,6 +143,17 @@ async function ensureSchema() {
 
     console.log('✅ Base tables verified/created.');
 
+    // 2. Seed Default Super Admin
+    const [adminCheck] = await pool.query('SELECT * FROM users WHERE email = ?', ['admin@gotek.com']);
+    if (adminCheck.length === 0) {
+      console.log('👤 Creating default Super Admin account...');
+      await pool.query(
+        'INSERT INTO users (id, name, email, password, role, organization) VALUES (?, ?, ?, ?, ?, ?)',
+        [uuidv4(), 'Super Admin', 'admin@gotek.com', 'admin123', 'super-admin', 'GOTEK']
+      );
+      console.log('✅ Default Super Admin created: admin@gotek.com / admin123');
+    }
+
     // 2. Add missing columns (for existing databases)
     const [dbResult] = await pool.query('SELECT DATABASE() as db');
     const currentDb = dbResult[0].db;
