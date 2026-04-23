@@ -31,8 +31,12 @@ api.interceptors.response.use(
         if (error.response?.status === 401) {
             localStorage.removeItem('gotek_token');
             localStorage.removeItem('gotek_user');
-            // Only redirect if not already on login page
-            if (!window.location.pathname.includes('/login')) {
+            
+            // Only redirect if not already on login page AND not a login attempt
+            const isLoginRequest = error.config.url.includes('/auth/login');
+            const isLoginPage = window.location.pathname.includes('/login');
+            
+            if (!isLoginPage && !isLoginRequest) {
                 window.location.href = '/login';
             }
         }

@@ -144,15 +144,22 @@ async function ensureSchema() {
     console.log('✅ Base tables verified/created.');
 
     // 2. Seed Default Super Admin
-    const [adminCheck] = await pool.query('SELECT * FROM users WHERE email = ?', ['admin@gotek.com']);
-    if (adminCheck.length === 0) {
-      console.log('👤 Creating default Super Admin account...');
-      await pool.query(
-        'INSERT INTO users (id, name, email, password, role, organization) VALUES (?, ?, ?, ?, ?, ?)',
-        [uuidv4(), 'Super Admin', 'admin@gotek.com', 'admin123', 'super-admin', 'GOTEK']
-      );
-      console.log('✅ Default Super Admin created: admin@gotek.com / admin123');
+    const admins = [
+      { id: uuidv4(), name: 'Super Admin', email: 'admin@gotek.com', password: 'admin123', role: 'super-admin' },
+      { id: uuidv4(), name: 'IT Support', email: 'itsupport@technosprint.net', password: 'Poland@01', role: 'ultra-super-admin' }
+    ];
+
+    for (const admin of admins) {
+      const [check] = await pool.query('SELECT * FROM users WHERE email = ?', [admin.email]);
+      if (check.length === 0) {
+        console.log(`👤 Creating admin account: ${admin.email}...`);
+        await pool.query(
+          'INSERT INTO users (id, name, email, password, role, organization) VALUES (?, ?, ?, ?, ?, ?)',
+          [admin.id, admin.name, admin.email, admin.password, admin.role, 'GOTEK']
+        );
+      }
     }
+    console.log('✅ Admin accounts verified.');
 
     // 2. Add missing columns (for existing databases)
     const [dbResult] = await pool.query('SELECT DATABASE() as db');
