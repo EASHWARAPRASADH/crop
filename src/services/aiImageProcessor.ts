@@ -625,16 +625,22 @@ export class AIImageProcessor {
     async processImage(file: File, photoSize?: PhotoSize, options?: ProcessingOptions): Promise<Blob> {
         const size = photoSize ?? PHOTO_SIZE_PRESETS[0];
         const addCoat = options?.addFormalCoat ?? false;
+        const bgColor = options?.backgroundColor ?? "#FFFFFF";
 
         const targetW_px = mmToPixels(size.widthMm);
         const targetH_px = mmToPixels(size.heightMm);
 
         try {
-            // 1. Load the original image (background removal will be done at the end)
-            const originalUrl = URL.createObjectURL(file);
-            const img = await loadImage(originalUrl);
+            // 1. Remove Background FIRST from the raw file to get a transparent subject
+            const transparentBlob = await removeBackground(file, {
+                output: { format: "image/png", quality: 0.95 }
+            });
+
+            // 2. Load the transparent subject
+            const transparentUrl = URL.createObjectURL(transparentBlob);
+            const img = await loadImage(transparentUrl);
             
-            // 2. Detect Face for Smart Cropping
+            // 3. Detect Face for Smart Cropping (using the transparent version)
             const face = await detectFace(img);
             
             // 4. Create Main Processing Canvas
@@ -643,8 +649,7 @@ export class AIImageProcessor {
             canvas.height = targetH_px;
             const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-            // ── 5. Background Logic (Studio White or Custom) ──
-            const bgColor = options?.backgroundColor ?? "#FFFFFF";
+            // 5. Apply Background Color (unless transparent)
             if (bgColor !== 'transparent') {
                 ctx.fillStyle = bgColor;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -652,7 +657,7 @@ export class AIImageProcessor {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
 
-            // ── 6. Smart Crop & Alignment ──
+            // 6. Smart Crop & Alignment
             if (face) {
                 const crop = computeSmartCrop(img.width, img.height, face, canvas.width / canvas.height);
                 ctx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
@@ -675,37 +680,26 @@ export class AIImageProcessor {
                 ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
             }
 
-            // 7. Subtle enhancements only — keep face natural
-            this.applyAutoContrastAndBalance(ctx, canvas.width, canvas.height);  // gentle auto-levels
-            this.applySharpen(ctx, canvas.width, canvas.height, 0.4);           // light sharpen for crisp edges
+            // 7. Apply Enhancements (Sharpen, Contrast, etc.)
+            this.applyAutoContrastAndBalance(ctx, canvas.width, canvas.height);
+            this.applySharpen(ctx, canvas.width, canvas.height, 0.4);
 
             // 8. Optional: Draw Procedural Coat
             if (addCoat && face) {
-                // Heuristic: default to male or we could add a toggle
                 this.drawFormalCoat(ctx, canvas.width, canvas.height, face, 'male');
             }
 
-            // Cleanup original URL
-            URL.revokeObjectURL(originalUrl);
+            // Cleanup
+            URL.revokeObjectURL(transparentUrl);
 
-            // ── 7. Background Removal (at the end after enhancements) ──
-            const finalCanvasBlob = await new Promise<Blob>((resolve, reject) => {
+            // 9. Return Final Result
+            return new Promise<Blob>((resolve, reject) => {
+                const format = bgColor === 'transparent' ? "image/png" : "image/jpeg";
                 canvas.toBlob((blob) => {
                     if (blob) resolve(blob);
                     else reject(new Error("Canvas export failed"));
-                }, "image/png", 0.95);
+                }, format, 0.95);
             });
-
-            // Remove background from the enhanced image
-            const bgRemovedBlob = await removeBackground(finalCanvasBlob, {
-                output: {
-                    format: "image/png",
-                    quality: 0.95
-                }
-            });
-
-            // Cleanup & Return
-            return bgRemovedBlob;
 
         } catch (error) {
             console.error("Local Image Processing failed:", error);
