@@ -342,11 +342,15 @@ export default function PhotoProcessor({
         canvas.height = img.height;
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          // Fill with white background first (transparent areas become black in JPEG without this)
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Draw the processed image on top of white background
+          // If not transparent, fill with white or the background color
+          if (bgType !== 'transparent') {
+            ctx.fillStyle = bgColor || "#FFFFFF";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          }
+          
+          // Draw the processed image
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
           // Apply ALL manual adjustments via pixel manipulation (ctx.filter is unreliable across browsers)
@@ -399,7 +403,8 @@ export default function PhotoProcessor({
             ctx.putImageData(imageData, 0, 0);
           }
 
-          canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.95);
+          const format = bgType === 'transparent' ? "image/png" : "image/jpeg";
+          canvas.toBlob((b) => resolve(b!), format, 0.95);
         } else {
           resolve(p.processedBlob);
         }
@@ -447,10 +452,11 @@ export default function PhotoProcessor({
     setIsUploading(true);
     try {
       const zip = new JSZip();
+      const extension = bgType === 'transparent' ? 'png' : 'jpg';
       for (const p of photoMatches) {
-        // Bake the manual color modifications exclusively into the JPG
+        // Bake the manual color modifications
         const finalBlob = await drawImageToCanvasBlob(p);
-        zip.file(`${p.filename.replace(/\.[^/.]+$/, "")}.jpg`, finalBlob);
+        zip.file(`${p.filename.replace(/\.[^/.]+$/, "")}.${extension}`, finalBlob);
       }
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
