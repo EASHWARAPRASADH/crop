@@ -557,17 +557,86 @@ export default function PhotoProcessor({
           <CardDescription>Auto background removal and lighting correction.</CardDescription>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
             <div className="border rounded-xl p-4 bg-muted/20">
-              <Label className="text-xs font-bold uppercase mb-3 block">1. Crop Size</Label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-xs font-bold uppercase block">1. Crop Size & AI Dimensions</Label>
+                <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+                   <button 
+                     onClick={() => setUnit("mm")} 
+                     className={cn("px-2 py-1 text-[9px] font-bold rounded-md transition-all", unit === "mm" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-600")}
+                   >
+                     MM
+                   </button>
+                   <button 
+                     onClick={() => setUnit("inch")} 
+                     className={cn("px-2 py-1 text-[9px] font-bold rounded-md transition-all", unit === "inch" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-600")}
+                   >
+                     INCH
+                   </button>
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
                 {PHOTO_SIZE_PRESETS.map((p, i) => (
-                  <button key={i} onClick={() => { setSelectedPresetIdx(i); setUseCustom(false); }} className={`p-2 rounded-lg border text-[10px] ${!useCustom && selectedPresetIdx === i ? "border-primary bg-primary/10 ring-1 ring-primary" : "bg-white"}`}>
-                    <div className="font-bold">{p.label}</div>
-                    <div className="text-muted-foreground">{displayW(p)}x{displayH(p)}</div>
+                  <button 
+                    key={i} 
+                    onClick={() => { setSelectedPresetIdx(i); setUseCustom(false); }} 
+                    className={`flex-1 min-w-[80px] p-2 rounded-lg border text-[10px] transition-all hover:border-blue-300 ${!useCustom && selectedPresetIdx === i ? "border-blue-600 bg-blue-50/50 ring-1 ring-blue-600" : "bg-white shadow-sm"}`}
+                  >
+                    <div className="font-bold text-gray-900">{p.label}</div>
+                    <div className="text-gray-500">{displayW(p)} x {displayH(p)}</div>
                   </button>
                 ))}
+                <button 
+                  onClick={() => setUseCustom(true)} 
+                  className={`flex-1 min-w-[80px] p-2 rounded-lg border text-[10px] transition-all hover:border-blue-300 ${useCustom ? "border-blue-600 bg-blue-50/50 ring-1 ring-blue-600" : "bg-white shadow-sm"}`}
+                >
+                  <div className="font-bold text-gray-900">Custom</div>
+                  <div className="text-gray-500">Manual Size</div>
+                </button>
               </div>
+
+              {useCustom && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="mt-4 pt-4 border-t border-dashed border-gray-200 grid grid-cols-2 gap-4"
+                >
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold text-gray-500 uppercase">Width ({unit})</Label>
+                    <div className="relative">
+                      <Input 
+                        type="number" 
+                        value={unit === 'mm' ? customWidthMm : parseFloat((customWidthMm / MM_PER_INCH).toFixed(2))}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (unit === 'mm') setCustomWidthMm(val);
+                          else setCustomWidthMm(val * MM_PER_INCH);
+                        }}
+                        className="h-9 rounded-xl text-xs font-bold pl-3 pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 pointer-events-none">{unit}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold text-gray-500 uppercase">Height ({unit})</Label>
+                    <div className="relative">
+                      <Input 
+                        type="number" 
+                        value={unit === 'mm' ? customHeightMm : parseFloat((customHeightMm / MM_PER_INCH).toFixed(2))}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (unit === 'mm') setCustomHeightMm(val);
+                          else setCustomHeightMm(val * MM_PER_INCH);
+                        }}
+                        className="h-9 rounded-xl text-xs font-bold pl-3 pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 pointer-events-none">{unit}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
           </div>
 

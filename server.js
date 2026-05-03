@@ -93,7 +93,7 @@ async function ensureSchema() {
         color varchar(20) DEFAULT '#3B82F6',
         created_by varchar(100) DEFAULT NULL,
         current_stage varchar(50) DEFAULT 'data_collected',
-        completed_stages longtext DEFAULT '[]',
+        completed_stages longtext,
         pdf_url varchar(500) DEFAULT NULL,
         branch varchar(255) DEFAULT NULL,
         assignedTo varchar(100) DEFAULT NULL,

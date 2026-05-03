@@ -37,7 +37,7 @@ export const PHOTO_SIZE_PRESETS: PhotoSize[] = [
         heightInch: parseFloat((22 / MM_PER_INCH).toFixed(2)),
     },
     {
-        label: "ID / Visa",
+        label: "ID/Visa",
         widthMm: 51,
         heightMm: 51,
         widthInch: parseFloat((51 / MM_PER_INCH).toFixed(2)),
