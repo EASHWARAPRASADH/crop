@@ -10,6 +10,7 @@ export interface PhotoSize {
 
 export interface ProcessingOptions {
     addFormalCoat?: boolean;
+    backgroundColor?: string; // Hex color or 'transparent'
 }
 
 // 300 DPI for print-quality output
@@ -642,9 +643,14 @@ export class AIImageProcessor {
             canvas.height = targetH_px;
             const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-            // ── 5. Background Logic (Studio White) ──
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // ── 5. Background Logic (Studio White or Custom) ──
+            const bgColor = options?.backgroundColor ?? "#FFFFFF";
+            if (bgColor !== 'transparent') {
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
 
             // ── 6. Smart Crop & Alignment ──
             if (face) {

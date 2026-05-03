@@ -188,6 +188,8 @@ export default function PhotoProcessor({
   const [customHeightMm, setCustomHeightMm] = useState(45);
   const [useCustom, setUseCustom] = useState(false);
   const [unit, setUnit] = useState<"mm" | "inch">("mm");
+  const [bgType, setBgType] = useState<"transparent" | "color">("color");
+  const [bgColor, setBgColor] = useState("#FFFFFF");
 
   const getPhotoSize = (): PhotoSize => {
     if (useCustom) {
@@ -257,7 +259,9 @@ export default function PhotoProcessor({
         const file = pendingFiles[i];
         setFileStatuses(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'processing' } : s));
         try {
-          const resultBlob = await processor.processImage(file, photoSize, {});
+          const resultBlob = await processor.processImage(file, photoSize, {
+            backgroundColor: bgType === 'transparent' ? 'transparent' : bgColor
+          });
           const match: PhotoMatch = {
             filename: file.name,
             originalFile: file,
@@ -639,6 +643,66 @@ export default function PhotoProcessor({
                 </motion.div>
               )}
             </div>
+
+            {/* Background Selection */}
+            <div className="border rounded-xl p-4 bg-muted/20">
+              <Label className="text-xs font-bold uppercase mb-3 block">2. Background Engine</Label>
+              <div className="flex flex-wrap gap-3">
+                {/* Transparency Toggle */}
+                <button 
+                  onClick={() => setBgType('transparent')}
+                  className={cn(
+                    "flex flex-col items-center gap-1.5 p-2 rounded-lg border text-[10px] transition-all min-w-[70px]",
+                    bgType === 'transparent' ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "bg-white hover:border-gray-300"
+                  )}
+                >
+                  <div className="w-6 h-6 rounded border border-gray-200 bg-[url('https://www.transparenttextures.com/patterns/checkerboard.png')] bg-[length:10px_10px]" />
+                  <span className="font-bold">Transparent</span>
+                </button>
+
+                {/* Color Presets */}
+                {[
+                  { name: 'White', color: '#FFFFFF' },
+                  { name: 'Sky', color: '#87CEEB' },
+                  { name: 'Navy', color: '#000080' },
+                  { name: 'Red', color: '#FF0000' },
+                ].map((preset) => (
+                  <button 
+                    key={preset.color}
+                    onClick={() => { setBgType('color'); setBgColor(preset.color); }}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 p-2 rounded-lg border text-[10px] transition-all min-w-[70px]",
+                      bgType === 'color' && bgColor === preset.color ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "bg-white hover:border-gray-300"
+                    )}
+                  >
+                    <div className="w-6 h-6 rounded border border-gray-200" style={{ backgroundColor: preset.color }} />
+                    <span className="font-bold">{preset.name}</span>
+                  </button>
+                ))}
+
+                {/* Custom Color Picker */}
+                <div className={cn(
+                  "flex flex-col items-center gap-1.5 p-2 rounded-lg border text-[10px] transition-all min-w-[100px]",
+                  bgType === 'color' && !['#FFFFFF', '#87CEEB', '#000080', '#FF0000'].includes(bgColor) ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "bg-white"
+                )}>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="color" 
+                      value={bgColor} 
+                      onChange={(e) => { setBgType('color'); setBgColor(e.target.value); }}
+                      className="w-6 h-6 rounded border-none cursor-pointer bg-transparent"
+                    />
+                    <input 
+                      type="text" 
+                      value={bgColor} 
+                      onChange={(e) => { setBgType('color'); setBgColor(e.target.value); }}
+                      className="w-14 h-5 text-[9px] font-mono border-none bg-transparent outline-none uppercase"
+                    />
+                  </div>
+                  <span className="font-bold text-gray-400">Custom Hex</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="border-2 border-dashed border-blue-100 rounded-2xl p-8 bg-blue-50/10 text-center relative group hover:bg-blue-50/30 transition-colors">
@@ -723,7 +787,7 @@ export default function PhotoProcessor({
                                 <span className="absolute top-1 left-1 bg-black/40 text-[8px] text-white px-1 rounded uppercase font-bold z-10">Raw</span>
                                 <img src={originalUrl} className="w-full h-full object-cover" />
                               </div>
-                              <div className="flex-1 bg-white relative ring-2 ring-blue-500/50 z-20 overflow-hidden">
+                              <div className="flex-1 bg-white relative ring-2 ring-blue-500/50 z-20 overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/checkerboard.png')] bg-[length:10px_10px]">
                                 <span className="absolute top-1 left-1 bg-blue-600 text-[8px] text-white px-1 rounded uppercase font-bold z-10">AI</span>
                                 <img 
                                   src={processedUrl} 
