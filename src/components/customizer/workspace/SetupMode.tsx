@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileCheck, ArrowRight, LayoutTemplate, Database, Image as ImageIcon, CheckCircle } from 'lucide-react';
+import { UploadCloud, FileCheck, ArrowRight, LayoutTemplate, Database, Image as ImageIcon, CheckCircle, Plus, X, GitBranch, AlertCircle, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
 import JSZip from 'jszip';
@@ -13,40 +13,7 @@ if (typeof pdfjsLib !== 'undefined' && pdfjsLib.GlobalWorkerOptions && pdfjsLib.
   (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(window as any).pdfjsLib.version}/pdf.worker.min.mjs`;
 }
 
-// ---- MODULE-LEVEL image store ----
-// Blob URLs are strings and survive Zustand's JSON clone, but we keep a
-// module-level cache for faster lookups within the same session.
-export const batchImageStore: Record<string, string> = {};
-
-export function hydrateBatchImageStore(images: Record<string, string>) {
-  const existingKeys = Object.keys(batchImageStore).length;
-  let added = 0;
-  for (const k of Object.keys(images)) {
-    if (!batchImageStore[k]) {
-      batchImageStore[k] = images[k];
-      added++;
-    }
-  }
-  if (added > 0) {
-    console.log(`[BatchPhotos] Hydrated ${added} images into batchImageStore (was ${existingKeys}, now ${Object.keys(batchImageStore).length})`);
-  }
-}
-
-export function getBatchImage(key: string): string | undefined {
-  if (!key) return undefined;
-  const trimmed = key.toString().trim();
-  if (batchImageStore[trimmed]) return batchImageStore[trimmed];
-  // Case-insensitive fallback
-  const lower = trimmed.toLowerCase();
-  for (const k of Object.keys(batchImageStore)) {
-    if (k.toLowerCase() === lower) return batchImageStore[k];
-  }
-  return undefined;
-}
-
-export function getBatchImageKeys(): string[] {
-  return Object.keys(batchImageStore);
-}
+import { hydrateBatchImageStore, getBatchImageKeys, batchImageStore } from '../../../utils/batchImageStore';
 
 async function convertPdfToImage(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
@@ -235,6 +202,79 @@ export default function SetupMode() {
     }
   };
 
+  const handleVariantTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>, variantId: string, side: 'front' | 'back') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      let dataUrl = '';
+      if (file.name.toLowerCase().endsWith('.pdf')) {
+        dataUrl = await convertPdfToImage(file);
+      } else {
+        const reader = new FileReader();
+        dataUrl = await new Promise((resolve) => {
+          reader.onload = (event) => resolve(event.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+      
+      const updatedVariants = [...(design.idCard.bulkWorkflow.templateVariants || [])];
+      const variantIndex = updatedVariants.findIndex(v => v.id === variantId);
+      if (variantIndex >= 0) {
+        if (side === 'front') updatedVariants[variantIndex].frontImage = dataUrl;
+        if (side === 'back') updatedVariants[variantIndex].backImage = dataUrl;
+        setField('idCard.bulkWorkflow.templateVariants', updatedVariants);
+      }
+    } catch (err) {
+      console.error('Error processing variant template', err);
+      alert('Could not upload variant template.');
+    }
+  };
+
+  const addTemplateVariant = () => {
+    const newVariant = {
+      id: `variant-${Date.now()}`,
+      name: `Variant ${(design.idCard.bulkWorkflow.templateVariants || []).length + 1}`,
+      condition: { column: datasetColumns[0] || '', value: '' },
+      frontImage: null,
+      backImage: null
+    };
+    setField('idCard.bulkWorkflow.templateVariants', [...(design.idCard.bulkWorkflow.templateVariants || []), newVariant]);
+  };
+
+  const updateVariantCondition = (id: string, key: 'column' | 'value', val: string) => {
+    const updated = (design.idCard.bulkWorkflow.templateVariants || []).map(v => 
+      v.id === id ? { ...v, condition: { ...v.condition, [key]: val } } : v
+    );
+    setField('idCard.bulkWorkflow.templateVariants', updated);
+  };
+
+  const removeVariant = (id: string) => {
+    const updated = (design.idCard.bulkWorkflow.templateVariants || []).filter(v => v.id !== id);
+    setField('idCard.bulkWorkflow.templateVariants', updated);
+  };
+
+  const resetWorkspace = () => {
+    if (confirm('Are you sure you want to clear EVERYTHING? This will delete all your design elements, dataset, and templates.')) {
+      setField('idCard.bulkWorkflow.datasetRecords', []);
+      setField('idCard.bulkWorkflow.datasetColumns', []);
+      setField('idCard.bulkWorkflow.templateVariants', []);
+      setField('idCard.bulkWorkflow.datasetImages', {});
+      setField('idCard.front.backgroundImage', null);
+      setField('idCard.back.backgroundImage', null);
+      setField('idCard.front.elements', []);
+      setField('idCard.back.elements', []);
+      setField('idCard.bulkWorkflow.mode', 'setup');
+    }
+  };
+
+  const getMatchCount = (variant: any) => {
+    if (!datasetRecords || !variant.condition.column || !variant.condition.value) return 0;
+    return datasetRecords.filter((r: any) => 
+      r[variant.condition.column]?.toString().trim().toLowerCase() === variant.condition.value.trim().toLowerCase()
+    ).length;
+  };
+
+
 
   const handleDatasetUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -287,10 +327,18 @@ export default function SetupMode() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-10 overflow-y-auto animate-in fade-in duration-500">
       <div className="max-w-6xl w-full">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-3">Workspace Setup</h1>
-          <p className="text-slate-500 text-lg">Define your visual template and your data source to begin.</p>
-        </div>
+        <div className="flex items-center justify-between mb-12">
+            <div>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Workspace Setup</h1>
+              <p className="text-slate-500 font-medium mt-1">Define your visual template and your data source to begin.</p>
+            </div>
+            <button 
+              onClick={resetWorkspace}
+              className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-50 rounded-xl font-bold text-sm transition-colors border border-transparent hover:border-red-100"
+            >
+              <RotateCcw size={16} /> Reset Workspace
+            </button>
+          </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
           {/* Template Card */}
@@ -426,6 +474,99 @@ export default function SetupMode() {
             )}
           </div>
         </div>
+
+        {/* Template Intelligence Section */}
+        {datasetReady && anyBgImage && (
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mb-10 overflow-hidden relative group">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
+                  <GitBranch size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">Template Intelligence</h3>
+                  <p className="text-slate-500 text-sm">Automatically swap templates based on dataset values (e.g. branch, department).</p>
+                </div>
+              </div>
+              <button 
+                onClick={addTemplateVariant}
+                disabled={(design.idCard.bulkWorkflow.templateVariants || []).length >= 4}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus size={16} /> Add Variant
+              </button>
+            </div>
+
+            {(design.idCard.bulkWorkflow.templateVariants || []).length > 0 ? (
+              <div className="space-y-4">
+                {(design.idCard.bulkWorkflow.templateVariants || []).map((variant, idx) => (
+                  <div key={variant.id} className="p-5 border border-slate-200 rounded-2xl bg-slate-50 flex items-start gap-6 relative">
+                    <button onClick={() => removeVariant(variant.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors">
+                      <X size={18} />
+                    </button>
+                    
+                    <div className="flex-1 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <span className="font-black text-purple-600 uppercase tracking-widest text-[10px] px-2 py-0.5 bg-purple-50 rounded border border-purple-100">
+                            {variant.condition.value ? `Variant: ${variant.condition.value}` : `Rule ${idx + 1}`}
+                          </span>
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                             <Database size={12}/>
+                             {getMatchCount(variant)} Records Match
+                          </div>
+                        </div>
+                        {(!variant.frontImage && !variant.backImage) && (
+                          <span className="text-[10px] font-bold text-amber-500 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded animate-pulse">
+                            <AlertCircle size={10}/> No artwork uploaded
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-slate-500">IF</span>
+                          <select 
+                            value={variant.condition.column}
+                            onChange={(e) => updateVariantCondition(variant.id, 'column', e.target.value)}
+                            className="bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-lg px-3 py-1.5 outline-none flex-1 max-w-[200px]"
+                          >
+                            {datasetColumns.map(col => <option key={col} value={col}>{col}</option>)}
+                          </select>
+                          <span className="text-sm font-bold text-slate-500">EQUALS</span>
+                          <input 
+                            type="text"
+                            placeholder="Value (e.g. North)"
+                            value={variant.condition.value}
+                            onChange={(e) => updateVariantCondition(variant.id, 'value', e.target.value)}
+                            className="bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-lg px-3 py-1.5 outline-none flex-1"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4">
+                        <label className="cursor-pointer flex-1">
+                          <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => handleVariantTemplateUpload(e, variant.id, 'front')} />
+                          <div className={`w-full py-3 rounded-xl border border-dashed flex items-center justify-center transition-colors text-xs font-bold ${variant.frontImage ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-600'}`}>
+                            {variant.frontImage ? <><FileCheck size={14} className="mr-2"/> Front Uploaded</> : <><UploadCloud size={14} className="mr-2"/> Upload Specific Front</>}
+                          </div>
+                        </label>
+                        <label className="cursor-pointer flex-1">
+                          <input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => handleVariantTemplateUpload(e, variant.id, 'back')} />
+                          <div className={`w-full py-3 rounded-xl border border-dashed flex items-center justify-center transition-colors text-xs font-bold ${variant.backImage ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-600'}`}>
+                            {variant.backImage ? <><FileCheck size={14} className="mr-2"/> Back Uploaded</> : <><UploadCloud size={14} className="mr-2"/> Upload Specific Back</>}
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 px-4 bg-slate-50 border border-slate-100 border-dashed rounded-2xl text-center text-slate-500 text-sm font-medium">
+                No variants configured. All records will use the default templates above.
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-center">
           <button

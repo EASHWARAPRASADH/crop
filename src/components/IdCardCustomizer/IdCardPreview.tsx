@@ -92,7 +92,7 @@ function CanvasElement({ element, onDragEnd, onTransformEnd, onClick, onDblClick
   let NodeComponent = null;
   switch (element.type) {
     case 'text':
-      NodeComponent = <Text {...commonProps} text={element.content} fontSize={element.fontSize} fill={element.fill} width={element.width} align={element.align} fontStyle={element.fontStyle} lineHeight={element.lineHeight || 1.2} letterSpacing={element.letterSpacing || 0} />;
+      NodeComponent = <Text {...commonProps} text={element.content} fontSize={element.fontSize} fontFamily={element.fontFamily} fill={element.fill} width={element.width} align={element.align} fontStyle={element.fontStyle} lineHeight={element.lineHeight || 1.2} letterSpacing={element.letterSpacing || 0} />;
       break;
     case 'image':
       NodeComponent = <KonvaImage {...commonProps} image={image} width={element.width} height={element.height} cornerRadius={element.cornerRadius || 0} />;

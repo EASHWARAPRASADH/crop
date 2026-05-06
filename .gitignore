@@ -1,9 +1,12 @@
 node_modules
 server/node_modules
 bulk-processing-standalone/node_modules
-# dist
+dist
 .DS_Store
 # .env.local
 *.log
 # .env
 uploads/
+Fonts.zip
+*.code-workspace
+public/fonts/

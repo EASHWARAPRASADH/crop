@@ -2,7 +2,7 @@ import { Group, Rect, Text, Image, Transformer, Circle, RegularPolygon, Line, Sh
 import { useConfiguratorStore } from '../../store/useConfiguratorStore';
 import { AVAILABLE_SHAPES } from '../../data/shapes';
 import { useCanvasImage } from '../../hooks/useCanvasImage';
-import { getBatchImage, batchImageStore } from './workspace/SetupMode';
+import { getBatchImage, batchImageStore } from '../../utils/batchImageStore';
 import { useRef, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
@@ -30,7 +30,11 @@ const getKonvaFill = (fill: string, width: number, height: number) => {
   return { fill };
 };
 
-function CanvasElement({ element, onDragEnd, onTransformEnd, onClick, onDblClick, isSelected, isReviewStep, record, mapping, isMappingStep, onMappingClick, onGuidesChange, cardSize }: {
+function CanvasElement({ 
+  element, onDragEnd, onTransformEnd, onClick, onDblClick, 
+  isSelected, isReviewStep, record, mapping, isMappingStep, 
+  onMappingClick, onGuidesChange, cardSize, recordIndex 
+}: {
   element: any;
   onDragEnd: (id: string, pos: { x: number; y: number }) => void;
   onTransformEnd: (id: string, attrs: any) => void;
@@ -44,6 +48,7 @@ function CanvasElement({ element, onDragEnd, onTransformEnd, onClick, onDblClick
   onMappingClick?: (id: string, sideName: string, e: any) => void;
   onGuidesChange?: (guides: {type: 'vertical'|'horizontal', pos: number}[]) => void;
   cardSize?: {width: number, height: number};
+  recordIndex?: number;
 }) {
   const mappedKey = mapping?.[element.id];
   const rawDynamicValue = (record && mappedKey) ? record[mappedKey] : null;
@@ -58,7 +63,23 @@ function CanvasElement({ element, onDragEnd, onTransformEnd, onClick, onDblClick
     const value = (dynamicValue !== undefined && dynamicValue !== null) ? String(dynamicValue).trim() : (element.content || '');
     
     if (element.type === 'qr') {
-      const val = value || 'QR';
+      let val = value || 'QR';
+      
+      if (element.qrMode === 'dummy') {
+        val = element.qrDummyText || 'DUMMY-QR';
+      } else if (element.qrMode === 'full_row' && record) {
+        if (element.qrFullRowFormat === 'json') {
+          val = JSON.stringify(record);
+        } else if (element.qrFullRowFormat === 'csv') {
+          val = Object.values(record).join(',');
+        } else {
+          // Default text format: Field: Value
+          val = Object.entries(record)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\n');
+        }
+      }
+
       // Use 2x resolution for better scannability (Standard margin is 4)
       QRCode.toDataURL(val, { 
         margin: 4, 
@@ -71,7 +92,14 @@ function CanvasElement({ element, onDragEnd, onTransformEnd, onClick, onDblClick
         .then(url => { if (active) setGeneratedSrc(url); })
         .catch(() => {});
     } else if (element.type === 'barcode') {
-      const val = value || '123456789';
+      let val = value || '123456789';
+      
+      if (element.barcodeMode === 'series') {
+        const start = element.barcodeSeriesStart || 1001;
+        const currentNum = start + (recordIndex || 0);
+        val = `${element.barcodeSeriesPrefix || ''}${currentNum}${element.barcodeSeriesSuffix || ''}`;
+      }
+
       try {
         const canvas = document.createElement('canvas');
         // Increase bar width and height for 2x resolution feel, plus solid background and margin
@@ -89,7 +117,7 @@ function CanvasElement({ element, onDragEnd, onTransformEnd, onClick, onDblClick
       }
     }
     return () => { active = false; };
-  }, [element.type, dynamicValue, element.content, element.width, element.height, element.fill]);
+  }, [element.type, dynamicValue, element.content, element.width, element.height, element.fill, element.barcodeMode, element.barcodeSeriesStart, element.barcodeSeriesPrefix, element.barcodeSeriesSuffix, recordIndex]);
 
   const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNlMmU4ZjAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIzIiB5PSIzIiB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHJ4PSIyIiByeT0iMiI+PC9yZWN0PjxjaXJjbGUgY3g9IjgiIGN5PSI4IiByPSIzIj48L2NpcmNsZT48cGF0aCBkPSJNMjEgMTVsLTUtNWwtNiA2Ij48L3BhdGg+PC9zdmc+';
   const dynString = dynamicValue?.toString()?.trim() || '';
@@ -618,7 +646,7 @@ function BackgroundImage({ src, width, height }: { src: string, width: number, h
   );
 }
 
-export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblClickElement, isReviewStep, forceSide, record, mapping, isMappingStep, onMappingClick }: {
+export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblClickElement, isReviewStep, forceSide, record, mapping, isMappingStep, onMappingClick, recordIndex, previewVariantId }: {
   onSelectElement?: (id: string | null, sideName?: string) => void;
   onUpdateElement?: (id: string, pos: any, sideName: string) => void;
   onDblClickElement?: (id: string, sideName: string, e: any) => void;
@@ -628,6 +656,8 @@ export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblC
   mapping?: Record<string, string>;
   isMappingStep?: boolean;
   onMappingClick?: (id: string, sideName: string, e: any) => void;
+  recordIndex?: number;
+  previewVariantId?: string | null;
 }) {
   const design = useConfiguratorStore((state) => state.design);
   const [guides, setGuides] = useState<{type: 'vertical'|'horizontal', pos: number}[]>([]);
@@ -642,6 +672,30 @@ export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblC
     
     if (forceSide && sideName !== forceSide) return null;
 
+    const sampleIdx = useConfiguratorStore(state => state.design.idCard.bulkWorkflow.sampleRecordIndex || 0);
+    const activeRecordIndex = recordIndex !== undefined ? recordIndex : sampleIdx;
+
+    let currentBgImage = sideData.backgroundImage;
+    const variants = design.idCard.bulkWorkflow.templateVariants || [];
+    
+    if (previewVariantId && previewVariantId !== 'default') {
+      const targetVariant = variants.find(v => v.id === previewVariantId);
+      if (targetVariant) {
+        if (sideName === 'front' && targetVariant.frontImage) currentBgImage = targetVariant.frontImage;
+        if (sideName === 'back' && targetVariant.backImage) currentBgImage = targetVariant.backImage;
+      }
+    } else if (!previewVariantId && record && variants.length > 0) {
+      for (const variant of variants) {
+        const colVal = record[variant.condition.column]?.toString().trim() || '';
+        const targetVal = variant.condition.value?.trim() || '';
+        if (colVal && targetVal && colVal.toLowerCase() === targetVal.toLowerCase()) {
+           if (sideName === 'front' && variant.frontImage) currentBgImage = variant.frontImage;
+           if (sideName === 'back' && variant.backImage) currentBgImage = variant.backImage;
+           break; // Stop at first match
+        }
+      }
+    }
+
     return (
       <Group 
         x={offsetX} 
@@ -653,7 +707,7 @@ export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblC
           width={width} 
           height={height} 
           {...getKonvaFill(sideData.backgroundColor, width, height)} 
-          cornerRadius={15} 
+          cornerRadius={design.idCard.cornerRadius || 0} 
           stroke={isActive ? "#5d5fef" : "#ccc"} 
           strokeWidth={isActive ? 2 : 1} 
           shadowColor="rgba(0,0,0,0.1)" 
@@ -674,22 +728,27 @@ export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblC
             }
           }}
         />
-        {sideData.backgroundImage && (
+        {currentBgImage && (
           <Group clipFunc={(ctx: any) => {
+            const r = design.idCard.cornerRadius || 0;
+            if (r === 0) {
+              ctx.rect(0, 0, width, height);
+              return;
+            }
             ctx.beginPath();
-            ctx.moveTo(15, 0);
-            ctx.lineTo(width - 15, 0);
-            ctx.quadraticCurveTo(width, 0, width, 15);
-            ctx.lineTo(width, height - 15);
-            ctx.quadraticCurveTo(width, height, width - 15, height);
-            ctx.lineTo(15, height);
-            ctx.quadraticCurveTo(0, height, 0, height - 15);
-            ctx.lineTo(0, 15);
-            ctx.quadraticCurveTo(0, 0, 15, 0);
+            ctx.moveTo(r, 0);
+            ctx.lineTo(width - r, 0);
+            ctx.quadraticCurveTo(width, 0, width, r);
+            ctx.lineTo(width, height - r);
+            ctx.quadraticCurveTo(width, height, width - r, height);
+            ctx.lineTo(r, height);
+            ctx.quadraticCurveTo(0, height, 0, height - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
             ctx.closePath();
           }}>
             <BackgroundImage 
-              src={sideData.backgroundImage} 
+              src={currentBgImage} 
               width={width} 
               height={height} 
             />
@@ -709,19 +768,39 @@ export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblC
             {/* Center cross-hair lines */}
             <Line points={[width / 2, 0, width / 2, height]} stroke="#ff00ff" strokeWidth={1} listening={false} dash={[6, 4]} opacity={0.4} />
             <Line points={[0, height / 2, width, height / 2]} stroke="#ff00ff" strokeWidth={1} listening={false} dash={[6, 4]} opacity={0.4} />
+            
+            {/* Trim Line / Safe Zone Indicator */}
+            {design.idCard.showTrimLine && (
+              <Rect 
+                x={10} 
+                y={10} 
+                width={width - 20} 
+                height={height - 20} 
+                stroke="#ff00ff" 
+                strokeWidth={0.5} 
+                dash={[2, 2]} 
+                listening={false}
+                opacity={0.6}
+              />
+            )}
           </Group>
         )}
         <Group clipFunc={(ctx: any) => {
+          const r = design.idCard.cornerRadius || 0;
+          if (r === 0) {
+            ctx.rect(0, 0, width, height);
+            return;
+          }
           ctx.beginPath();
-          ctx.moveTo(15, 0);
-          ctx.lineTo(width - 15, 0);
-          ctx.quadraticCurveTo(width, 0, width, 15);
-          ctx.lineTo(width, height - 15);
-          ctx.quadraticCurveTo(width, height, width - 15, height);
-          ctx.lineTo(15, height);
-          ctx.quadraticCurveTo(0, height, 0, height - 15);
-          ctx.lineTo(0, 15);
-          ctx.quadraticCurveTo(0, 0, 15, 0);
+          ctx.moveTo(r, 0);
+          ctx.lineTo(width - r, 0);
+          ctx.quadraticCurveTo(width, 0, width, r);
+          ctx.lineTo(width, height - r);
+          ctx.quadraticCurveTo(width, height, width - r, height);
+          ctx.lineTo(r, height);
+          ctx.quadraticCurveTo(0, height, 0, height - r);
+          ctx.lineTo(0, r);
+          ctx.quadraticCurveTo(0, 0, r, 0);
           ctx.closePath();
         }}>
           {sideData.elements.map((el) => (
@@ -740,6 +819,7 @@ export default function IdCardPreview({ onSelectElement, onUpdateElement, onDblC
                 mapping={mapping}
                 onGuidesChange={setGuides}
                 cardSize={{width, height}}
+                recordIndex={activeRecordIndex}
               />
           ))}
         </Group>

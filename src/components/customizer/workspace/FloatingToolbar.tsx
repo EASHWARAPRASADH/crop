@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useConfiguratorStore } from '../../../store/useConfiguratorStore';
-import { AlignLeft, AlignCenter, AlignRight, Bold, Trash2, X, Type, Image as ImageIcon } from 'lucide-react';
+import { AlignLeft, AlignCenter, AlignRight, Bold, Trash2, X, Type, Image as ImageIcon, ChevronUp, ChevronDown, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
 import { loadGoogleFont } from '../../../data/googleFonts';
 
 export default function FloatingToolbar({ stageRef }: any) {
@@ -75,6 +75,28 @@ export default function FloatingToolbar({ stageRef }: any) {
     const newMapping = { ...mapping };
     delete newMapping[selectedId];
     setField('idCard.bulkWorkflow.mapping', newMapping);
+  };
+
+  const moveElement = (direction: 'up' | 'down' | 'front' | 'back') => {
+    if (!selectedId) return;
+    const currentElements = design.idCard[activeSide].elements;
+    const index = currentElements.findIndex(e => e.id === selectedId);
+    if (index === -1) return;
+
+    const newElements = [...currentElements];
+    const element = newElements.splice(index, 1)[0];
+
+    if (direction === 'up') {
+      newElements.splice(Math.min(index + 1, currentElements.length), 0, element);
+    } else if (direction === 'down') {
+      newElements.splice(Math.max(index - 1, 0), 0, element);
+    } else if (direction === 'front') {
+      newElements.push(element);
+    } else if (direction === 'back') {
+      newElements.unshift(element);
+    }
+
+    setField(`idCard.${activeSide}.elements`, newElements);
   };
 
   return (
@@ -233,14 +255,130 @@ export default function FloatingToolbar({ stageRef }: any) {
               </div>
            )}
 
-           {(el.type === 'qr' || el.type === 'barcode') && (
-             <label className="flex flex-col">
-               <span className="text-[9px] font-bold text-slate-400 mb-0.5">COLOR</span>
-               <input type="color" value={el.fill || '#000000'} onChange={(e) => updateEl({ fill: e.target.value })} className="w-6 h-6 border-none bg-transparent"/>
-             </label>
-           )}
+            {(el.type === 'qr' || el.type === 'barcode') && (
+              <div className="flex flex-col ml-1">
+                <span className="text-[9px] font-bold text-slate-400 mb-0.5">COLOR</span>
+                <input type="color" value={el.fill || '#000000'} onChange={(e) => updateEl({ fill: e.target.value })} className="w-6 h-6 border-none bg-transparent"/>
+              </div>
+            )}
+
+            {el.type === 'barcode' && (
+              <>
+                <div className="flex flex-col ml-1 border-l border-slate-200 pl-2">
+                  <span className="text-[9px] font-bold text-slate-400 mb-0.5">BC MODE</span>
+                  <select 
+                    value={el.barcodeMode || 'mapped'} 
+                    onChange={(e) => updateEl({ barcodeMode: e.target.value })}
+                    className="text-[10px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none hover:border-indigo-300 transition-colors"
+                  >
+                    <option value="mapped">Mapped</option>
+                    <option value="series">Series</option>
+                  </select>
+                </div>
+
+                {el.barcodeMode === 'series' && (
+                  <>
+                    <div className="flex flex-col ml-1 border-l border-slate-200 pl-2">
+                      <span className="text-[9px] font-bold text-slate-400 mb-0.5">START</span>
+                      <input 
+                        type="number"
+                        value={el.barcodeSeriesStart || 1001}
+                        onChange={(e) => updateEl({ barcodeSeriesStart: parseInt(e.target.value) })}
+                        className="w-16 h-6 text-[10px] font-bold bg-slate-50 border border-slate-200 rounded px-1"
+                      />
+                    </div>
+                    <div className="flex flex-col ml-1 border-l border-slate-200 pl-2">
+                      <span className="text-[9px] font-bold text-slate-400 mb-0.5">PREFIX</span>
+                      <input 
+                        type="text"
+                        placeholder="e.g. ID-"
+                        value={el.barcodeSeriesPrefix || ''}
+                        onChange={(e) => updateEl({ barcodeSeriesPrefix: e.target.value })}
+                        className="w-12 h-6 text-[10px] font-bold bg-slate-50 border border-slate-200 rounded px-1"
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {el.type === 'qr' && (
+              <>
+                <div className="flex flex-col ml-1 border-l border-slate-200 pl-2">
+                  <span className="text-[9px] font-bold text-slate-400 mb-0.5">MODE</span>
+                  <select 
+                    value={el.qrMode || 'mapped'} 
+                    onChange={(e) => updateEl({ qrMode: e.target.value })}
+                    className="text-[10px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none hover:border-indigo-300 transition-colors"
+                  >
+                    <option value="mapped">Mapped</option>
+                    <option value="dummy">Dummy</option>
+                    <option value="full_row">Full Row</option>
+                  </select>
+                </div>
+
+                {el.qrMode === 'dummy' && (
+                  <div className="flex flex-col ml-1 border-l border-slate-200 pl-2">
+                    <span className="text-[9px] font-bold text-slate-400 mb-0.5">STATIC TEXT</span>
+                    <input 
+                      type="text"
+                      placeholder="e.g. https://aircrop.com"
+                      value={el.qrDummyText || ''}
+                      onChange={(e) => updateEl({ qrDummyText: e.target.value })}
+                      className="w-24 h-6 text-[10px] font-bold bg-slate-50 border border-slate-200 rounded px-1"
+                    />
+                  </div>
+                )}
+
+                {el.qrMode === 'full_row' && (
+                  <div className="flex flex-col ml-1 border-l border-slate-200 pl-2">
+                    <span className="text-[9px] font-bold text-slate-400 mb-0.5">FORMAT</span>
+                    <select 
+                      value={el.qrFullRowFormat || 'text'} 
+                      onChange={(e) => updateEl({ qrFullRowFormat: e.target.value })}
+                      className="text-[10px] font-bold bg-slate-50 border border-slate-200 rounded p-1 outline-none"
+                    >
+                      <option value="text">Label: Value</option>
+                      <option value="json">JSON</option>
+                      <option value="csv">CSV</option>
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
         </div>
       )}
+
+      <div className="px-2 flex items-center gap-0.5 border-r border-slate-200">
+        <button 
+          onClick={() => moveElement('front')}
+          className="p-1 hover:bg-slate-50 text-slate-400 hover:text-indigo-600 rounded transition-all"
+          title="Bring to Front"
+        >
+          <ArrowUpToLine size={14}/>
+        </button>
+        <button 
+          onClick={() => moveElement('up')}
+          className="p-1 hover:bg-slate-50 text-slate-400 hover:text-indigo-600 rounded transition-all"
+          title="Bring Forward"
+        >
+          <ChevronUp size={14}/>
+        </button>
+        <button 
+          onClick={() => moveElement('down')}
+          className="p-1 hover:bg-slate-50 text-slate-400 hover:text-indigo-600 rounded transition-all"
+          title="Send Backward"
+        >
+          <ChevronDown size={14}/>
+        </button>
+        <button 
+          onClick={() => moveElement('back')}
+          className="p-1 hover:bg-slate-50 text-slate-400 hover:text-indigo-600 rounded transition-all"
+          title="Send to Back"
+        >
+          <ArrowDownToLine size={14}/>
+        </button>
+      </div>
 
       <div className="px-2 flex gap-1">
         <button onClick={deleteEl} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>

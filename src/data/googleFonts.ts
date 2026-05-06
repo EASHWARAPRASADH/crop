@@ -2,12 +2,13 @@
 // Each entry: [family, category]
 // Categories: 'sans-serif' | 'serif' | 'display' | 'handwriting' | 'monospace'
 
-export type FontCategory = 'sans-serif' | 'serif' | 'display' | 'handwriting' | 'monospace';
+export type FontCategory = 'sans-serif' | 'serif' | 'display' | 'handwriting' | 'monospace' | 'regional';
 
 export interface FontEntry {
   family: string;
   category: FontCategory;
   isSystem?: boolean;
+  isLocal?: boolean;
 }
 
 const SYSTEM_FONTS: [string, FontCategory][] = [
@@ -1669,16 +1670,63 @@ const RAW_FONTS: [string, FontCategory][] = [
 
 // Deduplicate by family name (keep the first occurrence)
 const seen = new Set<string>();
+
+export const FONT_CATEGORIES: FontCategory[] = ['sans-serif', 'serif', 'display', 'handwriting', 'monospace', 'regional'];
+
+// Pre-defined list of local/regional fonts
+const LOCAL_REGIONAL_FONTS: [string, FontCategory][] = [
+  // ─── Hindi (Devanagari) Fonts ───
+  ['Kruti Dev 010', 'regional'],
+  ['Nirmala UI', 'regional'],
+  ['Hind', 'regional'],
+  ['Mukta', 'regional'],
+  ['Martel', 'regional'],
+  ['Rozha One', 'regional'],
+  ['Tiro Hindi', 'regional'],
+  ['Laila', 'regional'],
+  ['Glegoo', 'regional'],
+  ['Inknut Antiqua', 'regional'],
+  ['Karma', 'regional'],
+  ['Amita', 'regional'],
+  ['Yantramanav', 'regional'],
+  ['Modak', 'regional'],
+  ['Biryani', 'regional'],
+  ['Kadwa', 'regional'],
+  ['Kalam', 'regional'],
+
+  // ─── Tamil Fonts ───
+  ['Baloo Thambi 2', 'regional'],
+  ['Catamaran', 'regional'],
+  ['Meera Inimai', 'regional'],
+  ['Arima Madurai', 'regional'],
+  ['Kavivanar', 'regional'],
+  ['Mukultha', 'regional'],
+  ['Pavanam', 'regional'],
+  ['Hind Madurai', 'regional'],
+  ['Latha', 'regional'],
+  ['Vijaya', 'regional'],
+  ['Arial Unicode MS', 'regional'],
+];
+
 export const GOOGLE_FONTS: FontEntry[] = [];
 
+// 1. Add Local Fonts first
+for (const [family, category] of LOCAL_REGIONAL_FONTS) {
+  GOOGLE_FONTS.push({ family, category, isLocal: true });
+  seen.add(family);
+}
+
+// 2. Add System and Google Fonts
 for (const [family, category] of RAW_FONTS) {
   if (!seen.has(family)) {
     seen.add(family);
-    GOOGLE_FONTS.push({ family, category, isSystem: SYSTEM_FONTS.some(sf => sf[0] === family) });
+    GOOGLE_FONTS.push({ 
+      family, 
+      category, 
+      isSystem: SYSTEM_FONTS.some(sf => sf[0] === family) 
+    });
   }
 }
-
-export const FONT_CATEGORIES: FontCategory[] = ['sans-serif', 'serif', 'display', 'handwriting', 'monospace'];
 
 // ── Font loading utilities ──
 
@@ -1690,9 +1738,8 @@ const loadingFonts = new Set<string>();
  * Returns a promise that resolves when the font CSS is appended.
  */
 export function loadGoogleFont(family: string): Promise<void> {
-  // Don't try to load system fonts from Google
-  const isSystem = GOOGLE_FONTS.find(f => f.family === family)?.isSystem;
-  if (isSystem) return Promise.resolve();
+  const font = GOOGLE_FONTS.find(f => f.family === family);
+  if (font?.isSystem || font?.isLocal) return Promise.resolve();
 
   if (loadedFonts.has(family) || loadingFonts.has(family)) {
     return Promise.resolve();
@@ -1722,7 +1769,7 @@ export function loadGoogleFont(family: string): Promise<void> {
 export function preloadFontBatch(families: string[]): void {
   const toLoad = families.filter(f => {
     const font = GOOGLE_FONTS.find(gf => gf.family === f);
-    return font && !font.isSystem && !loadedFonts.has(f) && !loadingFonts.has(f);
+    return font && !font.isSystem && !font.isLocal && !loadedFonts.has(f) && !loadingFonts.has(f);
   });
   
   if (toLoad.length === 0) return;
@@ -1740,7 +1787,7 @@ export function preloadFontBatch(families: string[]): void {
 }
 
 export function isFontLoaded(family: string): boolean {
-  const isSystem = GOOGLE_FONTS.find(f => f.family === family)?.isSystem;
-  if (isSystem) return true;
+  const font = GOOGLE_FONTS.find(f => f.family === family);
+  if (font?.isSystem || font?.isLocal) return true;
   return loadedFonts.has(family);
 }

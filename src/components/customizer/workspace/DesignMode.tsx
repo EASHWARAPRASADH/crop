@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useConfiguratorStore } from '../../../store/useConfiguratorStore';
 import IdCardPreview from '../IdCardPreview';
-import { Layers, Database, Type, Image as ImageIcon, QrCode, Barcode, ChevronRight, Maximize2, Move, Grid3x3, Columns, ImagePlus, ZoomIn, ZoomOut, RotateCcw, Minus, Pencil, Activity, PenTool } from 'lucide-react';
+import { Layers, Database, Type, Image as ImageIcon, QrCode, Barcode, ChevronRight, Maximize2, Move, Grid3x3, Columns, ImagePlus, ZoomIn, ZoomOut, RotateCcw, Minus, Pencil, Activity, PenTool, ChevronUp, ChevronDown, ArrowUpToLine, ArrowDownToLine, Trash2, ChevronLeft, Play, GitBranch } from 'lucide-react';
 import { Stage, Layer, Group, Line } from 'react-konva';
-import { getBatchImageKeys, hydrateBatchImageStore } from './SetupMode';
+import { getBatchImageKeys, hydrateBatchImageStore } from '../../../utils/batchImageStore';
 import { AVAILABLE_SHAPES, SHAPE_CATEGORIES, ShapeCategory } from '../../../data/shapes';
 import FontBar from './FontBar';
 import { Search as SearchIcon } from 'lucide-react';
@@ -11,11 +11,13 @@ import { Search as SearchIcon } from 'lucide-react';
 export default function DesignMode({ stageRef, idCardStageRef, zoom, setZoom }: any) {
   const design = useConfiguratorStore(state => state.design);
   const setField = useConfiguratorStore(state => state.setField);
-  const { mapping, datasetColumns } = design.idCard.bulkWorkflow;
+  const { mapping, datasetColumns, datasetRecords, sampleRecordIndex } = design.idCard.bulkWorkflow;
+  const totalRecords = datasetRecords?.length || 0;
   const activeSide = design.idCard.activeSide;
   const elements = design.idCard[activeSide].elements;
 
-  const [activeTab, setActiveTab] = useState<'headers' | 'layers' | 'frames'>('headers');
+  const [variantPreviewId, setVariantPreviewId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'headers' | 'layers' | 'frames' | 'settings'>('headers');
   const [shapeSearch, setShapeSearch] = useState('');
   const [shapeCategory, setShapeCategory] = useState<ShapeCategory | 'All'>('All');
 
@@ -129,6 +131,25 @@ export default function DesignMode({ stageRef, idCardStageRef, zoom, setZoom }: 
 
     setField(`idCard.${activeSide}.elements`, [...elements, newElement]);
     setField(`idCard.bulkWorkflow.mapping`, { ...mapping, [newId]: columnName });
+    setField('idCard.selected', newId);
+  };
+
+  const addSpecialQR = (mode: 'dummy' | 'full_row') => {
+    const newId = `${mode}-qr-${Date.now()}`;
+    const newElement: any = {
+      id: newId,
+      type: 'qr',
+      x: Math.round(width / 2 - 25),
+      y: height / 2 - 10,
+      width: 60,
+      height: 60,
+      qrMode: mode,
+      qrDummyText: mode === 'dummy' ? 'https://aircrop.com' : '',
+      qrFullRowFormat: 'text',
+      content: mode === 'dummy' ? 'Dummy QR' : 'Full Data QR'
+    };
+    
+    setField(`idCard.${activeSide}.elements`, [...elements, newElement]);
     setField('idCard.selected', newId);
   };
 
@@ -328,14 +349,46 @@ export default function DesignMode({ stageRef, idCardStageRef, zoom, setZoom }: 
     }
   }, [drawingTool]);
 
+  const moveElement = (id: string, direction: 'up' | 'down' | 'front' | 'back') => {
+    const side = activeSide;
+    const currentElements = design.idCard[side].elements;
+    const index = currentElements.findIndex(el => el.id === id);
+    if (index === -1) return;
+
+    const newElements = [...currentElements];
+    const element = newElements.splice(index, 1)[0];
+
+    if (direction === 'up') {
+      newElements.splice(Math.min(index + 1, currentElements.length), 0, element);
+    } else if (direction === 'down') {
+      newElements.splice(Math.max(index - 1, 0), 0, element);
+    } else if (direction === 'front') {
+      newElements.push(element);
+    } else if (direction === 'back') {
+      newElements.unshift(element);
+    }
+
+    setField(`idCard.${side}.elements`, newElements);
+  };
+
+  const deleteElement = (id: string) => {
+    const side = activeSide;
+    const newElements = design.idCard[side].elements.filter(el => el.id !== id);
+    setField(`idCard.${side}.elements`, newElements);
+    if (design.idCard.selected === id) {
+      setField('idCard.selected', null);
+    }
+  };
+
   return (
     <div className="flex h-full bg-slate-100 overflow-hidden">
       {/* Left Sidebar */}
       <div className="w-72 bg-white border-r border-slate-200 shadow-sm flex flex-col z-10 shrink-0">
-        <div className="flex px-4 py-3 border-b border-slate-100 gap-1">
-          <button onClick={() => setActiveTab('headers')} className={`flex-1 text-[10px] font-black uppercase py-2 rounded-lg transition-all ${activeTab === 'headers' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>Headers</button>
-          <button onClick={() => setActiveTab('frames')} className={`flex-1 text-[10px] font-black uppercase py-2 rounded-lg transition-all ${activeTab === 'frames' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>Frames</button>
-          <button onClick={() => setActiveTab('layers')} className={`flex-1 text-[10px] font-black uppercase py-2 rounded-lg transition-all ${activeTab === 'layers' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>Layers</button>
+        <div className="flex px-2 py-3 border-b border-slate-100 gap-0.5">
+          <button onClick={() => setActiveTab('headers')} className={`flex-1 text-[9px] font-black uppercase py-2 rounded-lg transition-all ${activeTab === 'headers' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>Data</button>
+          <button onClick={() => setActiveTab('frames')} className={`flex-1 text-[9px] font-black uppercase py-2 rounded-lg transition-all ${activeTab === 'frames' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>Frames</button>
+          <button onClick={() => setActiveTab('layers')} className={`flex-1 text-[9px] font-black uppercase py-2 rounded-lg transition-all ${activeTab === 'layers' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>Layers</button>
+          <button onClick={() => setActiveTab('settings')} className={`flex-1 text-[9px] font-black uppercase py-2 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>Card</button>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
@@ -498,15 +551,175 @@ export default function DesignMode({ stageRef, idCardStageRef, zoom, setZoom }: 
                    <div 
                     key={el.id} 
                     onClick={() => setField('idCard.selected', el.id)} 
-                    className={`p-2 rounded-lg flex items-center justify-between cursor-pointer border ${isSelected ? 'border-indigo-400 bg-indigo-50/50' : 'border-transparent hover:bg-slate-50'}`}
+                    className={`p-2 rounded-lg flex items-center justify-between cursor-pointer border group/item ${isSelected ? 'border-indigo-400 bg-indigo-50/50' : 'border-transparent hover:bg-slate-50'}`}
                    >
-                     <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-2 min-w-0">
                        {typeIcon}
-                       <span className="text-xs font-bold text-slate-700 truncate w-32 uppercase tracking-tighter">{typeLabel}</span>
+                       <span className="text-xs font-bold text-slate-700 truncate w-24 uppercase tracking-tighter">{typeLabel}</span>
+                     </div>
+                     <div className={`flex items-center gap-0.5 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover/item:opacity-100'} transition-opacity`}>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'front'); }}
+                          className="p-1 hover:bg-white hover:shadow-sm rounded text-slate-400 hover:text-indigo-600 transition-all"
+                          title="Bring to Front"
+                        >
+                          <ArrowUpToLine size={12} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'up'); }}
+                          className="p-1 hover:bg-white hover:shadow-sm rounded text-slate-400 hover:text-indigo-600 transition-all"
+                          title="Bring Forward"
+                        >
+                          <ChevronUp size={12} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'down'); }}
+                          className="p-1 hover:bg-white hover:shadow-sm rounded text-slate-400 hover:text-indigo-600 transition-all"
+                          title="Send Backward"
+                        >
+                          <ChevronDown size={12} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); moveElement(el.id, 'back'); }}
+                          className="p-1 hover:bg-white hover:shadow-sm rounded text-slate-400 hover:text-indigo-600 transition-all"
+                          title="Send to Back"
+                        >
+                          <ArrowDownToLine size={12} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); deleteElement(el.id); }}
+                          className="p-1 hover:bg-red-50 rounded text-slate-300 hover:text-red-500 transition-all ml-1"
+                          title="Delete Layer"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                      </div>
                    </div>
                  );
                })}
+
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <div className="text-[11px] font-black uppercase text-slate-400">Special Elements</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => addSpecialQR('dummy')}
+                    className="flex flex-col items-center gap-2 p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:shadow-md transition-all group"
+                  >
+                    <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                      <QrCode size={18} className="text-indigo-600" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Dummy QR</span>
+                  </button>
+                  <button 
+                    onClick={() => addSpecialQR('full_row')}
+                    className="flex flex-col items-center gap-2 p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:shadow-md transition-all group"
+                  >
+                    <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-emerald-100 transition-colors">
+                      <QrCode size={18} className="text-emerald-600" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Full Data QR</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const newId = `series-barcode-${Date.now()}`;
+                      const newElement: any = {
+                        id: newId,
+                        type: 'barcode',
+                        x: Math.round(width / 2 - 50),
+                        y: height / 2 - 20,
+                        width: 100,
+                        height: 40,
+                        barcodeMode: 'series',
+                        barcodeSeriesStart: 1001,
+                        barcodeSeriesPrefix: 'SN-',
+                        content: 'Series Barcode'
+                      };
+                      setField(`idCard.${activeSide}.elements`, [...elements, newElement]);
+                      setField('idCard.selected', newId);
+                    }}
+                    className="flex flex-col items-center gap-2 p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:shadow-md transition-all group"
+                  >
+                    <div className="p-2 bg-orange-50 rounded-lg group-hover:bg-orange-100 transition-colors">
+                      <Barcode size={18} className="text-orange-600" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Series Bar</span>
+                  </button>
+                </div>
+                <button 
+                  onClick={addStaticText}
+                  className="w-full flex items-center justify-center gap-2 p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 hover:shadow-md transition-all group"
+                >
+                  <Type size={16} className="text-slate-400 group-hover:text-indigo-600" />
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Static Text</span>
+                </button>
+              </div>
+            </div>
+          )}
+          {activeTab === 'settings' && (
+            <div className="p-5 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+               <div className="space-y-1">
+                 <h3 className="text-xl font-black text-slate-800 tracking-tight">Card Settings</h3>
+                 <p className="text-slate-500 text-xs font-medium">Control the physical appearance of the press-ready card.</p>
+               </div>
+
+               <div className="space-y-4">
+                 <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Corner Radius</label>
+                      <span className="text-xs font-black text-indigo-600">{design.idCard.cornerRadius}mm</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="40" 
+                      value={design.idCard.cornerRadius} 
+                      onChange={(e) => setField('idCard.cornerRadius', parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold">
+                      <span>Sharp (Full Edge)</span>
+                      <span>Rounded</span>
+                    </div>
+                 </div>
+
+                 <div className="space-y-3 pt-4 border-t border-slate-100">
+                   <label className="flex items-center justify-between group cursor-pointer">
+                     <div className="flex flex-col">
+                       <span className="text-xs font-black text-slate-700 uppercase tracking-tight">Safe Zone (Trim Line)</span>
+                       <span className="text-[10px] font-bold text-slate-400">Shows 5mm inner design margin</span>
+                     </div>
+                     <div 
+                       onClick={() => setField('idCard.showTrimLine', !design.idCard.showTrimLine)}
+                       className={`w-10 h-5 rounded-full transition-all relative ${design.idCard.showTrimLine ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                     >
+                       <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${design.idCard.showTrimLine ? 'left-6' : 'left-1'}`} />
+                     </div>
+                   </label>
+
+                   <label className="flex items-center justify-between group cursor-pointer">
+                     <div className="flex flex-col">
+                       <span className="text-xs font-black text-slate-700 uppercase tracking-tight">Show Production Grid</span>
+                       <span className="text-[10px] font-bold text-slate-400">Alignment helper lines</span>
+                     </div>
+                     <div 
+                       onClick={() => setField('idCard.showGrid', !design.idCard.showGrid)}
+                       className={`w-10 h-5 rounded-full transition-all relative ${design.idCard.showGrid ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                     >
+                       <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${design.idCard.showGrid ? 'left-6' : 'left-1'}`} />
+                     </div>
+                   </label>
+                 </div>
+                 
+                 <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                   <div className="flex items-center gap-2 text-amber-700 mb-1">
+                      <Activity size={14} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Production Note</span>
+                   </div>
+                   <p className="text-[10px] leading-relaxed text-amber-600 font-bold">
+                     Use **0mm Radius** for borderless designs that require full-bleed edge printing. Ensure your background extends to the edges.
+                   </p>
+                 </div>
+               </div>
             </div>
           )}
         </div>
@@ -520,6 +733,18 @@ export default function DesignMode({ stageRef, idCardStageRef, zoom, setZoom }: 
           <button onClick={() => setField('idCard.size', '86x54')} className={`px-3 py-1.5 text-xs font-bold rounded-lg ${design.idCard.size === '86x54' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>Landscape</button>
           <div className="w-px h-5 bg-slate-200 mx-1" />
           <FontBar />
+          <div className="w-px h-5 bg-slate-200 mx-1" />
+          <select 
+            value={variantPreviewId || 'data'} 
+            onChange={(e) => setVariantPreviewId(e.target.value === 'data' ? null : e.target.value)}
+            className="px-3 py-1.5 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-lg outline-none cursor-pointer hover:bg-slate-100"
+          >
+            <option value="data">Auto (From Data)</option>
+            <option value="default">Main Template</option>
+            {design.idCard.bulkWorkflow.templateVariants?.map(v => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
         </div>
 
         {/* The zooming workspace area — freely draggable */}
@@ -548,6 +773,7 @@ export default function DesignMode({ stageRef, idCardStageRef, zoom, setZoom }: 
                 <IdCardPreview 
                   isReviewStep={false}
                   record={design.idCard.bulkWorkflow.datasetRecords?.[design.idCard.bulkWorkflow.sampleRecordIndex || 0]}
+                  previewVariantId={variantPreviewId}
                   mapping={mapping}
                   onSelectElement={(id, sideName) => {
                     setField('idCard.selected', id);
@@ -663,6 +889,70 @@ export default function DesignMode({ stageRef, idCardStageRef, zoom, setZoom }: 
                 outline: 'none', resize: 'none'
               }}
             />
+          )}
+
+          {/* Active Variant UI Badge (Template Intelligence Preview) */}
+          {design.idCard.bulkWorkflow.templateVariants && design.idCard.bulkWorkflow.templateVariants.length > 0 && (
+             <div className="absolute top-4 left-4 z-50 pointer-events-none">
+               {(() => {
+                 const currentRecord = datasetRecords?.[sampleRecordIndex || 0];
+                 let activeVariant = null;
+                 if (currentRecord) {
+                   for (const v of design.idCard.bulkWorkflow.templateVariants) {
+                     if (currentRecord[v.condition.column]?.toString().trim().toLowerCase() === v.condition.value?.trim().toLowerCase()) {
+                       activeVariant = v;
+                       break;
+                     }
+                   }
+                 }
+                 if (activeVariant) {
+                   return (
+                     <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 border border-purple-200 text-purple-700 rounded-lg shadow-sm backdrop-blur-md">
+                       <GitBranch size={14} />
+                       <span className="text-[10px] font-black uppercase tracking-widest">Variant: {activeVariant.name}</span>
+                     </div>
+                   );
+                 }
+                 return null;
+               })()}
+             </div>
+          )}
+
+          {/* Data Scrubber */}
+          {totalRecords > 0 && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-white/90 backdrop-blur-md border border-slate-200 shadow-xl px-5 py-3 rounded-full">
+              <div className="flex flex-col items-end mr-2">
+                <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none">Record</span>
+                <span className="text-xs font-black text-indigo-600 leading-tight">{sampleRecordIndex + 1} / {totalRecords}</span>
+              </div>
+              
+              <button 
+                onClick={() => setField('idCard.bulkWorkflow.sampleRecordIndex', Math.max(0, sampleRecordIndex - 1))}
+                className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-600 shadow-sm transition-colors"
+              >
+                <ChevronLeft size={16}/>
+              </button>
+              
+              <input 
+                type="range" 
+                min="0" 
+                max={Math.max(0, totalRecords - 1)} 
+                value={sampleRecordIndex} 
+                onChange={(e) => setField('idCard.bulkWorkflow.sampleRecordIndex', Number(e.target.value))}
+                className="w-48 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-grab active:cursor-grabbing accent-indigo-600"
+              />
+              
+              <button 
+                onClick={() => setField('idCard.bulkWorkflow.sampleRecordIndex', Math.min(totalRecords - 1, sampleRecordIndex + 1))}
+                className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-600 shadow-sm transition-colors"
+              >
+                <ChevronRight size={16}/>
+              </button>
+
+              <div className="ml-2 pl-3 border-l border-slate-200">
+                <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1"><Play size={10} className="text-emerald-500"/> Live</span>
+              </div>
+            </div>
           )}
         </div>
       </div>

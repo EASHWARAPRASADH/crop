@@ -331,7 +331,7 @@ export default function FontBar() {
                         className="text-[11px] text-slate-400 block truncate mt-0.5"
                         style={{ fontFamily: `"${font.family}", ${font.category}` }}
                       >
-                        The quick brown fox jumps
+                        {font.category === 'regional' ? 'नमस्ते / வணக்கம்' : 'The quick brown fox jumps'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
@@ -340,6 +340,7 @@ export default function FontBar() {
                         font.category === 'serif' ? 'bg-emerald-50 text-emerald-600' :
                         font.category === 'display' ? 'bg-amber-50 text-amber-600' :
                         font.category === 'handwriting' ? 'bg-purple-50 text-purple-600' :
+                        font.category === 'regional' ? 'bg-orange-50 text-orange-600' :
                         'bg-slate-100 text-slate-500'
                       }`}>
                         {font.category}

@@ -34,12 +34,31 @@ export interface Element {
   lineJoin?: string;
   closed?: boolean;
   _debugLogged?: string | null;
+  qrMode?: 'mapped' | 'dummy' | 'full_row';
+  qrDummyText?: string;
+  qrFullRowFormat?: 'json' | 'csv' | 'text';
+  barcodeMode?: 'mapped' | 'series';
+  barcodeSeriesStart?: number;
+  barcodeSeriesPrefix?: string;
+  barcodeSeriesSuffix?: string;
+  barcodeFormat?: string; // CODE128, EAN13, etc.
 }
 
 export interface SideData {
   backgroundColor: string;
   backgroundImage?: string;
   elements: Element[];
+}
+
+export interface TemplateVariant {
+  id: string;
+  name: string;
+  condition: {
+    column: string;
+    value: string;
+  };
+  frontImage: string | null;
+  backImage: string | null;
 }
 
 export interface Design {
@@ -101,6 +120,8 @@ export interface Design {
     defaultFontSize: number;
     defaultBold: boolean;
     defaultItalic: boolean;
+    cornerRadius: number;
+    showTrimLine: boolean;
     drawingTool: 'none' | 'straight' | '2point' | 'multipoint' | 'freeform' | 'custom_frame' | 'freeform_frame';
     front: SideData;
     back: SideData;
@@ -116,10 +137,22 @@ export interface Design {
       isProcessing: boolean;
       progress: number;
       processedRecords: DatasetRecord[];
+      templateVariants: TemplateVariant[];
       exportSettings: {
         dpi: number;
-        pageSize: string;
+        pageSize: 'A4' | 'A3' | 'Legal' | 'Custom';
+        customWidth?: number;
+        customHeight?: number;
         bleed: number;
+        marginTop: number;
+        marginBottom: number;
+        marginLeft: number;
+        marginRight: number;
+        gutterX: number;
+        gutterY: number;
+        showCutLines: boolean;
+        showRegistrationMarks: boolean;
+        mirrorBackside: boolean;
       };
     };
   };
@@ -183,6 +216,8 @@ const defaultDesign: Design = {
     defaultFontSize: 14,
     defaultBold: false,
     defaultItalic: false,
+    cornerRadius: 15,
+    showTrimLine: false,
     drawingTool: 'none',
     front: {
       backgroundColor: '#ffffff',
@@ -204,10 +239,20 @@ const defaultDesign: Design = {
       isProcessing: false,
       progress: 0,
       processedRecords: [],
+      templateVariants: [],
       exportSettings: {
         dpi: 300,
-        pageSize: 'A4',
-        bleed: 3,
+        pageSize: 'A3',
+        bleed: 0,
+        marginTop: 10,
+        marginBottom: 10,
+        marginLeft: 10,
+        marginRight: 10,
+        gutterX: 0,
+        gutterY: 0,
+        showCutLines: false,
+        showRegistrationMarks: true,
+        mirrorBackside: true,
       },
     },
   },
@@ -278,22 +323,26 @@ export const useConfiguratorStore = create<ConfiguratorStore>((set, get) => ({
 
   setField: (path, value) => {
     set((state) => {
-      const current = clone(state.design);
-      const nextDesign = updateAtPath(current, path, value);
+      // Deep clone only the design state, not the whole store
+      const currentDesign = clone(state.design);
+      const nextDesign = updateAtPath(currentDesign, path, value);
+      
       return {
         design: nextDesign,
-        past: [...state.past, state.design],
+        past: [...state.past.slice(-20), state.design], // Cap history at 20 for memory safety
         future: [],
       };
     });
     
-    // Auto-save if a project is selected
-    const { design, saveLocal } = get();
-    if (design.idCard.selected) {
-      saveLocal(design.idCard.selected);
-    } else {
-      saveLocal(); // Global fallback
-    }
+    // Defer saving to next tick for UI responsiveness
+    setTimeout(() => {
+      const { design, saveLocal } = get();
+      if (design.idCard.selected) {
+        saveLocal(design.idCard.selected);
+      } else {
+        saveLocal();
+      }
+    }, 0);
   },
 
   toggleAccessory: (label) => set((state) => {
@@ -388,7 +437,7 @@ export const useConfiguratorStore = create<ConfiguratorStore>((set, get) => ({
       let dataToSave = JSON.stringify(snapshot);
       const key = id ? `${LOCAL_STORAGE_KEY}-${id}` : LOCAL_STORAGE_KEY;
 
-      if (dataToSave.length > 1500000) {
+      if (dataToSave.length > 1200000) {
         const stripped = { ...snapshot };
         if (stripped.logoUrl?.startsWith('data:')) stripped.logoUrl = '';
         if (stripped.customPatternUrl?.startsWith('data:')) stripped.customPatternUrl = '';
@@ -397,6 +446,17 @@ export const useConfiguratorStore = create<ConfiguratorStore>((set, get) => ({
         }
         if (stripped.idCard?.logoUrl?.startsWith('data:')) {
           stripped.idCard = { ...stripped.idCard, logoUrl: '' };
+        }
+        // If we are still too large, we might have to strip the dataset images (blob URLs)
+        // since they are invalid on refresh anyway.
+        if (dataToSave.length > 2000000) {
+          stripped.idCard = { 
+            ...stripped.idCard, 
+            bulkWorkflow: { 
+              ...stripped.idCard.bulkWorkflow, 
+              datasetImages: {} 
+            } 
+          };
         }
         dataToSave = JSON.stringify(stripped);
       }
